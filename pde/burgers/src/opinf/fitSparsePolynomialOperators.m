@@ -1,0 +1,33 @@
+function [B_est, C_est, D_est, diagnostics,identifiedDiffusion] = fitSparsePolynomialOperators( ...
+        trainingStates, driftTargets, timeStep)
+
+stateDim = size(trainingStates, 1);
+
+if size(driftTargets, 1) ~= stateDim
+    error('fitSparsePolynomialOperators:DimensionMismatch', ...
+        'driftTargets must have the same number of rows as trainingStates.');
+end
+if size(driftTargets, 2) ~= size(trainingStates, 2)
+    error('fitSparsePolynomialOperators:SnapshotMismatch', ...
+        'driftTargets must have the same number of snapshots as trainingStates.');
+end
+
+regressionMatrix = assembleRegressionMatrix(trainingStates, stateDim);
+[thetaEstimate, noiseCovariance, activeSupport] = solveSparseConstrainedEm( ...
+    trainingStates, driftTargets, regressionMatrix, stateDim, timeStep);
+
+[B_est, C_est, D_est] = vecToOperators(thetaEstimate, stateDim);
+
+quadraticOperatorScale = sqrt(timeStep);
+D_est = zeros(stateDim, 1);
+
+identifiedDiffusion = sqrt(diag(noiseCovariance .* timeStep));
+
+diagnostics = struct( ...
+    'thetaEstimate', thetaEstimate, ...
+    'noiseCovariance', noiseCovariance, ...
+    'activeSupport', activeSupport, ...
+    'identifiedDiffusion', identifiedDiffusion, ...
+    'quadraticOperatorScale', quadraticOperatorScale, ...
+    'constraintResidual', norm(buildEnergyConstraintMatrix(stateDim) * thetaEstimate));
+end
